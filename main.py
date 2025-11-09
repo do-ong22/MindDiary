@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 # --- 1. FastAPI 앱 초기화 및 설정 ---
 app = FastAPI()
 
+os.makedirs("static", exist_ok=True) # Ensure static directory exists BEFORE mounting
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-os.makedirs("static", exist_ok=True) # Ensure static directory exists
 os.makedirs("static/images", exist_ok=True)
 
 
