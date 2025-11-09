@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mind Galaxy - 생각의 은하수</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --galaxy-bg: #0c0c1a;
+            --text-color: #e0e0e0;
+            --primary-color: #7a5afc;
+            --container-bg: #1a1a2e;
+            --border-color: #3a3a5e;
+        }
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: var(--galaxy-bg);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 350px;
+            background-color: var(--container-bg);
+            padding: 2em;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 5px 0px 15px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+        h1 {
+            color: var(--primary-color);
+            font-weight: 500;
+            margin-bottom: 0.5em;
+        }
+        p {
+            color: #aaa;
+            font-size: 0.9em;
+            margin-bottom: 2em;
+        }
+        textarea {
+            width: 100%;
+            flex-grow: 1;
+            padding: 1em;
+            background-color: var(--galaxy-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 1em;
+            color: var(--text-color);
+            box-sizing: border-box;
+            resize: vertical; /* Allow vertical resizing */
+            min-height: 250px; /* Increased default height */
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 0.8em;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 1.5em;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #9d8bfc;
+        }
+        #graph-container {
+            flex-grow: 1;
+            position: relative;
+        }
+        #graph {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            display: none; /* Initially hidden */
+            z-index: 20;
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h1>Mind Galaxy</h1>
+        <p>일기를 쓰면 당신의 생각들이 연결되어 하나의 은하수가 됩니다. 노드를 드래그하여 당신만의 은하를 탐험해보세요.</p>
+        <form id="analysis-form">
+            <textarea name="text" placeholder="오늘의 생각을 여기에 기록하세요..."></textarea>
+            <button type="submit">은하수 생성하기</button>
+        </form>
+
+        <div class="display-options" style="margin-top: 2em; padding-top: 1.5em; border-top: 1px solid var(--border-color);">
+            <h3 style="color: var(--text-color); font-size: 1em; margin-bottom: 0.8em;">표시 방식</h3>
+            <label style="margin-right: 1em;"><input type="radio" name="displayMode" value="all" checked> 모두</label>
+            <label style="margin-right: 1em;"><input type="radio" name="displayMode" value="nodes"> 노드만</label>
+            <label><input type="radio" name="displayMode" value="words"> 단어만</label>
+        </div>
+    </div>
+    <div id="graph-container">
+        <div id="graph"></div>
+        <div class="loader" id="loader"></div>
+    </div>
+
+    <!-- JS Libraries -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="//unpkg.com/force-graph"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('analysis-form');
+            const textArea = form.querySelector('textarea');
+            const loader = document.getElementById('loader');
+            const graphContainer = document.getElementById('graph');
+
+            // Initialize ForceGraph
+            const myGraph = ForceGraph()(graphContainer);
+
+            let displayMode = 'all'; // Default display mode
+
+            // Event listener for display mode changes
+            const displayModeRadios = document.querySelectorAll('input[name="displayMode"]');
+            displayModeRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    displayMode = e.target.value;
+                    myGraph.refresh(); // Redraw graph with new display mode
+                });
+            });
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const text = textArea.value;
+                if (!text.trim()) {
+                    alert('내용을 입력해주세요.');
+                    return;
+                }
+
+                loader.style.display = 'block';
+                graphContainer.style.opacity = '0.3';
+
+                try {
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `text=${encodeURIComponent(text)}`
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || '분석에 실패했습니다.');
+                    }
+
+                    const graphData = await response.json();
+                    
+                    // Start with a clean slate
+                    myGraph.graphData({ nodes: [], links: [] });
+
+                    // A short delay to let the graph clear before loading new data
+                    setTimeout(() => {
+                        myGraph.graphData(graphData)
+                            .backgroundColor('#0c0c1a')
+                            .nodeLabel('id')
+                            .linkColor(() => 'rgba(255,255,255,0.2)')
+                            .linkDirectionalArrowLength(3.5)
+                            .linkDirectionalArrowRelPos(1)
+                            .linkCurvature(0) // Back to straight lines
+                            .linkDirectionalParticles(3) // Re-adding the missing particles
+                            .linkDirectionalParticleWidth(3)
+                            .linkDirectionalParticleSpeed(0.008)
+                            .linkDirectionalParticleColor(link => {
+                                const sourceNode = link.source;
+                                switch (sourceNode.emotion) {
+                                    case 'positive': return '#5a9cfc';
+                                    case 'negative': return '#ff7171';
+                                    default: return sourceNode.randomColor || '#9a8c98';
+                                }
+                            })
+                            .d3AlphaDecay(0.001)
+                            .d3VelocityDecay(0.2)
+                            .d3Force('charge', d3.forceManyBody().strength(-1)) // Significantly reduced repulsion
+                            .d3Force('link', d3.forceLink().strength(0.2).distance(70)) // Increased link distance
+                            .nodeCanvasObject((node, ctx, globalScale) => {
+                                const label = node.id;
+                                const fontSize = 14 / globalScale;
+                                // Emphasize core nodes by factoring in degree
+                                const nodeSize = Math.log(node.size + 1) * 4 + node.degree * 1.5 + 5; // Increased base size and multiplier
+
+                                // Set color based on emotion
+                                let nodeColor;
+                                switch (node.emotion) {
+                                    case 'positive': nodeColor = '#5a9cfc'; break; // Blue
+                                    case 'negative': nodeColor = '#ff7171'; break; // Red
+                                    default:
+                                        // Generate a random color for neutral nodes, but keep it consistent
+                                        if (!node.randomColor) {
+                                            const hue = Math.floor(Math.random() * 360); // 0-359
+                                            const saturation = Math.floor(Math.random() * 30) + 70; // 70-100%
+                                            const lightness = Math.floor(Math.random() * 20) + 60; // 60-80%
+                                            node.randomColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                                        }
+                                        nodeColor = node.randomColor;
+                                        break;
+                                }
+
+                                // Conditional drawing based on displayMode
+                                if (displayMode === 'nodes' || displayMode === 'all') {
+                                    // Draw Node Circle
+                                    ctx.beginPath();
+                                    ctx.arc(node.x, node.y, nodeSize, 0, 2 * Math.PI, false);
+                                    ctx.fillStyle = nodeColor;
+                                    ctx.fill();
+                                }
+
+                                if (displayMode === 'words' || displayMode === 'all') {
+                                    // Draw Label
+                                    ctx.font = `${fontSize}px Noto Sans KR`;
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillStyle = 'white';
+                                    ctx.fillText(label, node.x, node.y + nodeSize + 5 / globalScale);
+                                }
+                            })
+                            .nodePointerAreaPaint((node, color, ctx) => {
+                                const nodeSize = Math.log(node.size + 1) * 4 + node.degree * 1.5 + 5; // Match visual size
+                                const clickPadding = 8; // Extra padding for click area
+                                ctx.beginPath();
+                                ctx.arc(node.x, node.y, nodeSize + clickPadding, 0, 2 * Math.PI, false);
+                                ctx.fillStyle = color; // Use the provided color for hit-testing
+                                ctx.fill();
+                            });
+                    }, 100);
+
+                } catch (error) {
+                    alert(error.message);
+                } finally {
+                    loader.style.display = 'none';
+                    graphContainer.style.opacity = '1';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

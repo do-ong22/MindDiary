@@ -1,0 +1,18 @@
+# Core web framework
+fastapi
+
+# ASGI server to run FastAPI
+uvicorn[standard]
+
+# Korean NLP library
+konlpy
+
+# Graph analysis and visualization
+networkx
+matplotlib
+
+# Template engine
+jinja2
+
+# For handling form data
+python-multipart
